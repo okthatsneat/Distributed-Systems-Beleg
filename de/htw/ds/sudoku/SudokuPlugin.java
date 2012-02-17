@@ -1,4 +1,4 @@
-package de.htw.ds.sudoku;
+	package de.htw.ds.sudoku;
 
 import java.util.Set;
 import de.htw.ds.TypeMetadata;

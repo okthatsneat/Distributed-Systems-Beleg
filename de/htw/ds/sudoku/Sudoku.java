@@ -406,6 +406,7 @@ public final class Sudoku implements Cloneable, Serializable {
 	 * @param args the arguments
 	 */
 	public static void main(final String[] args) throws IOException {
+		final long start = System.currentTimeMillis();
 		final Sudoku sudoku;
 		final Command command;
 		try {
@@ -445,5 +446,7 @@ public final class Sudoku implements Cloneable, Serializable {
 				System.out.print(solution);
 			}
 		}
+		final long stop = System.currentTimeMillis();
+		System.out.println(stop-start);
 	}
 }

@@ -80,26 +80,34 @@ public final class SudokuPlugin2 implements SudokuPlugin {
 	 */
 	public Set<Sudoku> resolve(final int recursionDepth, final int digitIndex, final Set<Byte> cellAlternatives) {
 		if (this.parent == null) throw new IllegalStateException();
-		final Semaphore indebtedSemaphore  = new Semaphore (1- cellAlternatives.size());
 		final Set<Sudoku> result = new HashSet<Sudoku>();
-		final int startThread = 1;
+		final int averageRecursionDepth = 2;
+		if (PROCESSOR_CUNT >= Math.pow(averageRecursionDepth, recursionDepth + 1)) {
+			resolveMultiThreated(recursionDepth, digitIndex, cellAlternatives, result);
+		} else {
+			resolveSingleThreated(recursionDepth, digitIndex, cellAlternatives, result);
+		}
+		return result;
+	}
+	
+	public Set<Sudoku> resolveSingleThreated(final int recursionDepth, final int digitIndex, final Set<Byte> cellAlternatives, final Set<Sudoku> result) {
 		for (final byte alternative : cellAlternatives) {
 			final Sudoku clone = this.parent.clone();
 			clone.getDigits()[digitIndex] = alternative;
-			// split into threads, excpet if recursion depth too deep
-			
-			// if abrage re: recursiondepth
-			// start thread
-			
-			if (recursionDepth < startThread) {
-				final SudokuReSolver reSolver = new SudokuReSolver(clone, result, recursionDepth,indebtedSemaphore );
-				new Thread(reSolver).start();
-			}
-			else {
-				result.addAll(clone.resolve(recursionDepth + 1)); // distributable!
-			}
+			result.addAll(clone.resolve(recursionDepth + 1)); // distributable!
 		}
-		if (recursionDepth < startThread) indebtedSemaphore.acquireUninterruptibly();
+		return result;
+	}
+
+	public Set<Sudoku> resolveMultiThreated(final int recursionDepth, final int digitIndex, final Set<Byte> cellAlternatives, final Set<Sudoku> result) {
+		final Semaphore indebtedSemaphore  = new Semaphore (1- cellAlternatives.size());
+		for (final byte alternative : cellAlternatives) {
+			final Sudoku clone = this.parent.clone();
+			clone.getDigits()[digitIndex] = alternative;
+			final SudokuReSolver reSolver = new SudokuReSolver(clone, result, recursionDepth,indebtedSemaphore );
+			new Thread(reSolver).start();
+		}
+		indebtedSemaphore.acquireUninterruptibly();
 		return result;
 	}
 

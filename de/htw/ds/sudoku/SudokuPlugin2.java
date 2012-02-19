@@ -1,8 +1,5 @@
 package de.htw.ds.sudoku;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
@@ -11,13 +8,13 @@ import de.htw.ds.TypeMetadata;
 
 
 /**
- * <p>Vector-Processing based implementation of the SudokuPlugin interface.</p>
+ * <p>Single-threaded base implementation of the SudokuPlugin interface.</p>
  */
-@TypeMetadata(copyright = "Hofmann, Evers & Guttandin, all rights reserved", version = "0.1.0", authors = "Philipp Hofmann / Christoph Guttandin / Justin Evers")
-public final class SudokuPlugin1 implements SudokuPlugin {
+@TypeMetadata(copyright = "2012 Christoph Guttandin, Philipp Hofmann, Justin Evers", version = "0.1.0", authors = "Christoph Guttandin, Philipp Hofmann, Justin Evers")
+public final class SudokuPlugin2 implements SudokuPlugin {
 	private Sudoku parent = null;
 	private static final int PROCESSOR_CUNT = Runtime.getRuntime().availableProcessors();
-	private static final Semaphore finishSemaphore = new Semaphore(PROCESSOR_CUNT);
+
 
 	/**
 	 * {@inheritDoc}
@@ -60,10 +57,6 @@ public final class SudokuPlugin1 implements SudokuPlugin {
 				break;
 			}
 		}
-		finishSemaphore.acquireUninterruptibly(PROCESSOR_CUNT);
-		
-		finishSemaphore.release(PROCESSOR_CUNT);
-
 		return result;
 	}
 
@@ -76,15 +69,9 @@ public final class SudokuPlugin1 implements SudokuPlugin {
 	 * @throws ArrayIndexOutOfBoundsException if the given index is out of range
 	 */
 	private void collectSolutions(final int digitIndex, final Set<Byte> result) {
-	
 		if (this.parent.getDigits()[digitIndex] < 0) {
-			
-			final SudokuSolver solver = new SudokuSolver(parent, result, digitIndex);
-			finishSemaphore.acquireUninterruptibly();
-			
-			new Thread(solver).start();										
+			result.addAll(this.parent.getSolutions(digitIndex));
 		}
-		
 	}
 
 
@@ -93,57 +80,59 @@ public final class SudokuPlugin1 implements SudokuPlugin {
 	 */
 	public Set<Sudoku> resolve(final int recursionDepth, final int digitIndex, final Set<Byte> cellAlternatives) {
 		if (this.parent == null) throw new IllegalStateException();
-
+		final Semaphore indebtedSemaphore  = new Semaphore (1- cellAlternatives.size());
 		final Set<Sudoku> result = new HashSet<Sudoku>();
 		for (final byte alternative : cellAlternatives) {
 			final Sudoku clone = this.parent.clone();
 			clone.getDigits()[digitIndex] = alternative;
-			result.addAll(clone.resolve(recursionDepth + 1)); // distributable!
+			// split into threads, excpet if recursion depth too deep
+			
+			// if abrage re: recursiondepth
+			// start thread
+			
+			if (recursionDepth <= 3) {
+			final SudokuReSolver reSolver = new SudokuReSolver(clone, result, recursionDepth,indebtedSemaphore );
+			//finishSemaphore.acquireUninterruptibly();
+			
+			new Thread(reSolver).start();
+			
+			}
+			
+			else {
+				result.addAll(clone.resolve(recursionDepth + 1)); // distributable!
+			}
 		}
+		if (recursionDepth <= 3) indebtedSemaphore.acquireUninterruptibly();
 		return result;
 	}
 
+	private static class SudokuReSolver implements Runnable {
+		private final Sudoku clone;
+		private final int recursionDepth;
+		private final Set<Sudoku> result;
+		private final Semaphore indebtedSemaphore;
 
-	/**
-	 * 
-	 */
-	private static class SudokuSolver implements Runnable {
-		private final Sudoku parent;
-		private final Set<Byte> result;
-		private final int digitIndex;
-
-		public SudokuSolver(final Sudoku parent, final Set<Byte> result, final int digitIndex) {
-			this.parent = parent;
+		public SudokuReSolver(final Sudoku clone, final Set<Sudoku> result, final int recursionDepth, final Semaphore indebtedSemaphore) {
+			this.clone = clone;
+			this.recursionDepth = recursionDepth;
 			this.result = result;
-			this.digitIndex = digitIndex;
+			this.indebtedSemaphore = indebtedSemaphore;
+			
 		}
 
 		public void run() {
 			try {
-				final Set<Byte> stuff = parent.getSolutions(digitIndex);
-				synchronized (result){
-					result.addAll(stuff);
-					}
+				
+			result.addAll(clone.resolve(recursionDepth + 1)); // distributable!		
 				
 			} finally {
-				finishSemaphore.release();
+				indebtedSemaphore.release();
 			}
 		}
 	}
 	
-	
-	
+
+
+
+
 }
-
-
-/* Speed Test!
- * dimension 3 :
- *	44ms plugin1
- *	28ms plugin0
- *
- *	dimension 6: 
- *	746 plugin1
- *	172 plugin0
- *
- */
-

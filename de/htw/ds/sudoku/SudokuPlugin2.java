@@ -82,6 +82,7 @@ public final class SudokuPlugin2 implements SudokuPlugin {
 		if (this.parent == null) throw new IllegalStateException();
 		final Semaphore indebtedSemaphore  = new Semaphore (1- cellAlternatives.size());
 		final Set<Sudoku> result = new HashSet<Sudoku>();
+		final int startThread = 1;
 		for (final byte alternative : cellAlternatives) {
 			final Sudoku clone = this.parent.clone();
 			clone.getDigits()[digitIndex] = alternative;
@@ -90,19 +91,15 @@ public final class SudokuPlugin2 implements SudokuPlugin {
 			// if abrage re: recursiondepth
 			// start thread
 			
-			if (recursionDepth <= 3) {
-			final SudokuReSolver reSolver = new SudokuReSolver(clone, result, recursionDepth,indebtedSemaphore );
-			//finishSemaphore.acquireUninterruptibly();
-			
-			new Thread(reSolver).start();
-			
+			if (recursionDepth < startThread) {
+				final SudokuReSolver reSolver = new SudokuReSolver(clone, result, recursionDepth,indebtedSemaphore );
+				new Thread(reSolver).start();
 			}
-			
 			else {
 				result.addAll(clone.resolve(recursionDepth + 1)); // distributable!
 			}
 		}
-		if (recursionDepth <= 3) indebtedSemaphore.acquireUninterruptibly();
+		if (recursionDepth < startThread) indebtedSemaphore.acquireUninterruptibly();
 		return result;
 	}
 
@@ -122,9 +119,10 @@ public final class SudokuPlugin2 implements SudokuPlugin {
 
 		public void run() {
 			try {
-				
-			result.addAll(clone.resolve(recursionDepth + 1)); // distributable!		
-				
+				final Set<Sudoku> stuff = clone.resolve(recursionDepth + 1);
+				synchronized (result){
+					result.addAll(stuff);
+				}
 			} finally {
 				indebtedSemaphore.release();
 			}

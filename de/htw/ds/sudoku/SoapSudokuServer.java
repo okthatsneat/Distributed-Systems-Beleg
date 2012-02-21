@@ -7,12 +7,17 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.rmi.RemoteException;
+import java.sql.Connection;
+import java.sql.SQLException;
+
+
 import javax.jws.WebService;
 import javax.sql.DataSource;
 import javax.xml.ws.Endpoint;
 import javax.xml.ws.WebServiceException;
 import javax.xml.ws.soap.SOAPBinding;
 import de.htw.ds.SocketAddress;
+
 
 /**
  * <p>Sudoku server class implementing a JAX-WS based server.
@@ -35,25 +40,69 @@ public class SoapSudokuServer implements SoapSudokuService{
  	}
 	
 	
-	@Override
+	
 	public void storeSolution(byte[] digitsToSolve, byte[] digitsSolved)
 			throws NullPointerException, IllegalStateException, JdbcException {
-		// TODO Auto-generated method stub
-		
+		try {
+			final Connection connection = this.dataSource.getConnection();
+			try {
+				connection.setAutoCommit(false);
+				final SudokuConnector connector = new SudokuConnector(connection);
+				connector.insertSolution(digitsToSolve, digitsSolved);
+				connection.commit();
+			} catch (final SQLException exception){
+				try { connection.rollback(); } catch (final Exception e) {}
+				throw exception;
+			} finally {
+				try { connection.close(); } catch (final Exception exception) {}
+			}
+		} catch (final SQLException exception) {
+			throw new JdbcException(exception);
+		}
 	}
 
-	@Override
+	
 	public byte[] getSolution(byte[] digitsToSolve)
 			throws NullPointerException, IllegalStateException, JdbcException {
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			final Connection connection = this.dataSource.getConnection();
+			try {
+				connection.setAutoCommit(false);
+				final SudokuConnector connector = new SudokuConnector(connection);
+				final byte [] digitsSolved = connector.querySolution(digitsToSolve);
+				connection.commit();
+				return digitsSolved;
+			} catch (final SQLException exception){
+				try { connection.rollback(); } catch (final Exception e) {}
+				throw exception;
+			} finally {
+				try { connection.close(); } catch (final Exception exception) {}
+			}
+		} catch (final SQLException exception) {
+			throw new JdbcException(exception);
+		}
 	}
 
 	@Override
 	public boolean solutionExists(byte[] digitsToSolve)
 			throws NullPointerException, IllegalStateException, JdbcException {
-		// TODO Auto-generated method stub
-		return false;
+		try {
+			final Connection connection = this.dataSource.getConnection();
+			try {
+				connection.setAutoCommit(false);
+				final SudokuConnector connector = new SudokuConnector(connection);
+				boolean solutionExists = connector.solutionExists(digitsToSolve);
+				connection.commit();
+				return solutionExists;
+			} catch (final SQLException exception){
+				try { connection.rollback(); } catch (final Exception e) {}
+				throw exception;
+			} finally {
+				try { connection.close(); } catch (final Exception exception) {}
+			}
+		} catch (final SQLException exception) {
+			throw new JdbcException(exception);
+		}
 	}
 
 	/**
@@ -65,8 +114,8 @@ public class SoapSudokuServer implements SoapSudokuService{
 	
 	/**
 	 * Application entry point. The given runtime parameters must be a SOAP service port,a
-	 * SOAP service name, a JDBC connection URL, a database user-ID, a database password,
-	 * and a tax rate.
+	 * SOAP service name, a JDBC connection URL, a database user-ID, a database password
+	 * 
 	 * @param args the given runtime arguments
 	 * @throws URISyntaxException if one of the given service URIs is malformed
 	 * @throws JdbcException if none of the supported JDBC drivers is installed

@@ -3,10 +3,14 @@ package de.htw.ds.sudoku;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.StringWriter;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
+
+import de.htw.ds.Namespaces;
 import de.htw.ds.TypeMetadata;
 
 
@@ -404,8 +408,25 @@ public final class Sudoku implements Cloneable, Serializable {
 	 * solutions. Note that cell values that are no digits (like dots) are interpreted as
 	 * negative values, i.e. values to be solved.
 	 * @param args the arguments
+	 * @throws URISyntaxException 
 	 */
-	public static void main(final String[] args) throws IOException {
+	
+	/* arg[0] plugin classpath
+	 * arg[1] mode; check or solve
+	 * arg[2] sudoku dimension
+	 * arg[3] sudoku digitsToSolve
+	 * arg[4] SERVICE_URI
+	 */
+	
+	public static void main(final String[] args) throws IOException, URISyntaxException {
+		
+		// SOAP stuff
+		
+		final URI SERVICE_URI = new URI(args[4]);
+		final SoapSudokuService proxy = Namespaces.createDynamicSoapServiceProxy(SoapSudokuService.class, SERVICE_URI);
+
+		// regular Sudoku stuff
+		
 		final long start = System.currentTimeMillis();
 		final Sudoku sudoku;
 		final Command command;
@@ -413,11 +434,12 @@ public final class Sudoku implements Cloneable, Serializable {
 			final SudokuPlugin plugin = (SudokuPlugin) Class.forName(args[0], true, Thread.currentThread().getContextClassLoader()).newInstance();
 			final byte dimension = Byte.parseByte(args[2]);
 
-			// Local sudoku server only expected on port 9000 in case of SudokuPlugin3!
+			/*No idea what this means, probably irrelevant & from old exercise:
+			Local sudoku server only expected on port 9000 in case of SudokuPlugin3!*/
 			sudoku = new Sudoku(plugin, dimension);
 			command = Command.valueOf(args[1].toUpperCase());
 		} catch (final Exception exception) {
-			System.out.println("Parameter syntax: <pluginClass:String> <command:create|check|solve> <dimension:2-6> { <digits:0-9|a-z|.> }");
+			System.out.println("Parameter syntax: <pluginClass:String> <command:create|check|solve> <dimension:2-6> { <digits:0-9|a-z|.> } <SERVICE_URI>");
 			System.out.println("Examples:");
 			System.out.println("de.htw.ds.sudoku.SudokuPlugin0 create 3");
 			System.out.println("de.htw.ds.sudoku.SudokuPlugin2 check 5");
@@ -435,6 +457,8 @@ public final class Sudoku implements Cloneable, Serializable {
 				return;
 			}
 		} else {
+			
+			// here the digitsToSolve are set up
 			sudoku.populate();
 			sudoku.reduce();
 		}
@@ -442,9 +466,35 @@ public final class Sudoku implements Cloneable, Serializable {
 		System.out.print(sudoku);
 
 		if (command == Command.CHECK || command == Command.SOLVE) {
-			for (final Sudoku solution : sudoku.resolve()) {
-				System.out.print(solution);
+			
+			//  check against proxy if solution exists
+			byte [] digitsToSolve = sudoku.getDigits();
+			try {
+				if ( proxy.solutionExists(digitsToSolve) ) {
+					//TODO format solution byte array to Sudoku solution type
+					final Sudoku solution = proxy.getSolution(digitsToSolve);
+				}
+				// else use plugin to solve and print out
+				else {
+					for (final Sudoku solution : sudoku.resolve()) {
+						System.out.print(solution);
+						/*TODO populate a byte array with the solution,
+						write to server as digitsSolved with key digitsToSolve*/
+					}	
+				}
+			
+			} catch (NullPointerException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IllegalStateException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (JdbcException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
+				
+			
 		}
 		final long stop = System.currentTimeMillis();
 		System.out.println(stop-start);
